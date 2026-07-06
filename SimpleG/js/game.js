@@ -207,11 +207,11 @@ function update(deltaTime) {
                 enemy.x = enemy.startX;
                 enemy.y = enemy.startY;
             } else {
-                // Simple dive path (p0=start, p1=forward, p2=near player, p3=loop back)
+                // Simple dive path (teardrop loop back to formation slot)
                 let p0x = enemy.startX, p0y = enemy.startY;
-                let p3x = enemy.startX, p3y = 0; // Return through the top
-                let p1x = p0x + 100 * enemyDirection, p1y = p0y + 150;
-                let p2x = player.x, p2y = player.y + 50;
+                let p3x = enemy.startX, p3y = enemy.startY; // Exact slot
+                let p1x = p0x + 100 * enemyDirection, p1y = p0y + 150; // Swoop out
+                let p2x = player.x, p2y = player.y + 50; // Dive to player
 
                 enemy.x = bezier(enemy.t, p0x, p1x, p2x, p3x);
                 enemy.y = bezier(enemy.t, p0y, p1y, p2y, p3y);
