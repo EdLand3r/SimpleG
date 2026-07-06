@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Galaga Retro Clone</title>
+    <style>
+        body {
+            margin: 0;
+            background-color: #111;
+            color: white;
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+        h1 {
+            margin: 5px 0;
+            font-size: 24px;
+            color: #ff0055;
+            text-shadow: 0 0 10px #ff0055;
+        }
+        canvas {
+            border: 4px solid #333;
+            background-color: #000;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.2);
+        }
+        .controls {
+            margin-top: 10px;
+            color: #888;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>GALAGA</h1>
+    <canvas id="gameCanvas" width="448" height="512"></canvas>
+    <div class="controls">Controles: Flechas [←] [→] para mover | [Espacio] para disparar</div>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+
+        // Estado del juego
+        let score = 0;
+        let lives = 3;
+        let gameOver = false;
+        let stars = [];
+
+        // Inicializar estrellas de fondo (efecto espacio)
+        for (let i = 0; i < 50; i++) {
+            stars.push({
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height,
+                size: Math.random() * 2,
+                speed: Math.random() * 2 + 1
+            });
+        }
+
+        // Configuración del jugador
+        const player = {
+            x: canvas.width / 2 - 15,
+            y: canvas.height - 50,
+            width: 30,
+            height: 30,
+            speed: 5,
+            cooldown: 0
+        };
+
+        let keys = {};
+        let bullets = [];
+        let enemyBullets = [];
+        let enemies = [];
+
+        // Configuración de enemigos (Filas y Columnas)
+        const enemyRows = 4;
+        const enemyCols = 8;
+        const enemyWidth = 24;
+        const enemyHeight = 20;
+        let enemyDirection = 1; // 1 = Derecha, -1 = Izquierda
+        let enemySpeed = 1.5;
+        let enemyStepDown = false;
+
+        function initEnemies() {
+            enemies = [];
+            for (let row = 0; row < enemyRows; row++) {
+                for (let col = 0; col < enemyCols; col++) {
+                    // Colores según la fila para simular tipos de bichos de Galaga
+                    let color = "#ff0055"; // Fila superior (Rojo)
+                    if (row === 1) color = "#00ffcc"; // Cyan
+                    if (row >= 2) color = "#ffcc00"; // Amarillo
+
+                    enemies.push({
+                        x: col * (enemyWidth + 15) + 50,
+                        y: row * (enemyHeight + 15) + 60,
+                        width: enemyWidth,
+                        height: enemyHeight,
+                        color: color,
+                        alive: true
+                    });
+                }
+            }
+        }
+
+        // Escuchar teclado
+        window.addEventListener("keydown", e => keys[e.code] = true);
+        window.addEventListener("keyup", e => keys[e.code] = false);
+
+        // Reiniciar juego
+        window.addEventListener("keydown", e => {
+            if (gameOver && e.code === "Space") {
+                score = 0;
+                lives = 3;
+                gameOver = false;
+                enemySpeed = 1.5;
+                initEnemies();
+                bullets = [];
+                enemyBullets = [];
+                player.x = canvas.width / 2 - 15;
+            }
+        });
+
+        function update() {
+            if (gameOver) return;
+
+            // --- 1. Mover Fondo (Estrellas) ---
+            stars.forEach(star => {
+                star.y += star.speed;
+                if (star.y > canvas.height) {
+                    star.y = 0;
+                    star.x = Math.random() * canvas.width;
+                }
+            });
+
+            // --- 2. Mover Jugador ---
+            if (keys["ArrowLeft"] && player.x > 0) player.x -= player.speed;
+            if (keys["ArrowRight"] && player.x < canvas.width - player.width) player.x += player.speed;
+
+            // Disparar
+            if (player.cooldown > 0) player.cooldown--;
+            if (keys["Space"] && player.cooldown === 0) {
+                bullets.push({ x: player.x + player.width / 2 - 2, y: player.y, width: 4, height: 10, speed: 7 });
+                player.cooldown = 15; // Tiempo entre ráfagas
+            }
+
+            // --- 3. Mover Balas del Jugador ---
+            bullets.forEach((bullet, bIndex) => {
+                bullet.y -= bullet.speed;
+                if (bullet.y < 0) bullets.splice(bIndex, 1);
+            });
+
+            // --- 4. Mover Enemigos en Bloque ---
+            let hitWall = false;
+            enemies.forEach(enemy => {
+                if (!enemy.alive) return;
+                enemy.x += enemySpeed * enemyDirection;
+                if (enemy.x + enemy.width > canvas.width - 10 || enemy.x < 10) {
+                    hitWall = true;
+                }
+                
+                // Disparo enemigo aleatorio
+                if (Math.random() < 0.001) { 
+                    enemyBullets.push({ x: enemy.x + enemy.width/2, y: enemy.y + enemy.height, width: 4, height: 10, speed: 4 });
+                }
+            });
+
+            if (hitWall) {
+                enemyDirection *= -1;
+                enemies.forEach(enemy => enemy.y += 10); // Bajan un escalón al tocar la pared
+            }
+
+            // --- 5. Mover Balas Enemigas ---
+            enemyBullets.forEach((eb, ebIndex) => {
+                eb.y += eb.speed;
+                if (eb.y > canvas.height) enemyBullets.splice(ebIndex, 1);
+
+                // Colisión bala enemiga contra jugador
+                if (eb.x < player.x + player.width &&
+                    eb.x + eb.width > player.x &&
+                    eb.y < player.y + player.height &&
+                    eb.y + eb.height > player.y) {
+                    
+                    enemyBullets.splice(ebIndex, 1);
+                    lives--;
+                    if (lives <= 0) gameOver = true;
+                }
+            });
+
+            // --- 6. Detectar Colisiones (Balas vs Enemigos) ---
+            bullets.forEach((bullet, bIndex) => {
+                enemies.forEach(enemy => {
+                    if (!enemy.alive) return;
+
+                    if (bullet.x < enemy.x + enemy.width &&
+                        bullet.x + bullet.width > enemy.x &&
+                        bullet.y < enemy.y + enemy.height &&
+                        bullet.y + bullet.height > enemy.y) {
+                        
+                        enemy.alive = false;
+                        bullets.splice(bIndex, 1);
+                        score += 100;
+                    }
+                });
+            });
+
+            // Comprobar si toda la oleada fue destruida
+            if (enemies.every(e => !e.alive)) {
+                enemySpeed += 0.5; // Sube la dificultad
+                initEnemies();
+            }
+
+            // Comprobar si los enemigos tocaron el suelo
+            enemies.forEach(enemy => {
+                if (enemy.alive && enemy.y + enemy.height >= player.y) {
+                    gameOver = true;
+                }
+            });
+        }
+
+        function draw() {
+            // Limpiar pantalla
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Dibujar fondo de estrellas
+            ctx.fillStyle = "white";
+            stars.forEach(star => {
+                ctx.fillRect(star.x, star.y, star.size, star.size);
+            });
+
+            if (gameOver) {
+                ctx.fillStyle = "red";
+                ctx.font = "30px 'Courier New'";
+                ctx.textAlign = "center";
+                ctx.fillText("GAME OVER", canvas.width / 2, canvas.height / 2);
+                ctx.fillStyle = "white";
+                ctx.font = "16px 'Courier New'";
+                ctx.fillText("Presiona ESPACIO para reiniciar", canvas.width / 2, canvas.height / 2 + 40);
+                return;
+            }
+
+            // Dibujar jugador (Nave clásica simplificada)
+            ctx.fillStyle = "#00ffcc";
+            ctx.beginPath();
+            ctx.moveTo(player.x + player.width / 2, player.y);
+            ctx.lineTo(player.x, player.y + player.height);
+            ctx.lineTo(player.x + player.width, player.y + player.height);
+            ctx.closePath();
+            ctx.fill();
+
+            // Dibujar enemigos
+            enemies.forEach(enemy => {
+                if (!enemy.alive) return;
+                ctx.fillStyle = enemy.color;
+                // Forma geométrica estilo insecto alienígena
+                ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
+                ctx.fillStyle = "black";
+                ctx.fillRect(enemy.x + 4, enemy.y + 4, 4, 4);
+                ctx.fillRect(enemy.x + enemy.width - 8, enemy.y + 4, 4, 4);
+            });
+
+            // Dibujar balas jugador
+            ctx.fillStyle = "#ffff00";
+            bullets.forEach(bullet => {
+                ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
+            });
+
+            // Dibujar balas enemigas
+            ctx.fillStyle = "#ff00ff";
+            enemyBullets.forEach(eb => {
+                ctx.fillRect(eb.x, eb.y, eb.width, eb.height);
+            });
+
+            // Interfaz de usuario (UI)
+            ctx.fillStyle = "white";
+            ctx.font = "16px 'Courier New'";
+            ctx.textAlign = "left";
+            ctx.fillText(`SCORE: ${score}`, 10, 25);
+            ctx.textAlign = "right";
+            ctx.fillText(`LIVES: ${"♥".repeat(lives)}`, canvas.width - 10, 25);
+        }
+
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Iniciar
+        initEnemies();
+        gameLoop();
+    </script>
+</body>
+</html>
