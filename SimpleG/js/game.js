@@ -61,6 +61,7 @@ const enemyHeight = 24;
 let enemyDirection = 1; 
 let enemyBaseSpeed = 90; // px per second
 let wave = 1;
+let enemyAttackTimer = 2.0;
 
 function initEnemies() {
     enemies = [];
@@ -121,6 +122,7 @@ function resetGame() {
     score = 0;
     lives = 3;
     wave = 1;
+    enemyAttackTimer = 2.0;
     enemyBaseSpeed = 90;
     gameOver = false;
     initEnemies();
@@ -173,25 +175,28 @@ function update(deltaTime) {
     // 4. Enemies
     let hitWall = false;
 
-    // Determine attack probability based on score/wave
-    let attackChance = 0.0005 * wave + (score * 0.00001);
+    // Countdown attack timer
+    enemyAttackTimer -= deltaTime;
+    let timeBetweenAttacks = Math.max(0.5, 3.0 - (wave * 0.2) - (score * 0.0005));
+    let startDiving = false;
+    if (enemyAttackTimer <= 0) {
+        startDiving = true;
+        enemyAttackTimer = timeBetweenAttacks;
+    }
     
+    let formationEnemies = [];
+
     enemies.forEach(enemy => {
         if (!enemy.alive) return;
 
         if (enemy.state === 'formation') {
+            formationEnemies.push(enemy);
             enemy.startX += enemyBaseSpeed * enemyDirection * deltaTime;
             enemy.x = enemy.startX;
             enemy.y = enemy.startY;
             
             if (enemy.x + enemy.width > canvas.width - 10 || enemy.x < 10) {
                 hitWall = true;
-            }
-
-            // Decide to dive
-            if (Math.random() < attackChance) {
-                enemy.state = 'diving';
-                enemy.t = 0;
             }
         } else if (enemy.state === 'diving') {
             enemy.t += 0.5 * deltaTime; // Dive speed
@@ -221,6 +226,12 @@ function update(deltaTime) {
             enemyBullets.push({ x: enemy.x + enemy.width/2, y: enemy.y + enemy.height, width: 4, height: 10, speed: 200 });
         }
     });
+
+    if (startDiving && formationEnemies.length > 0) {
+        let attacker = formationEnemies[Math.floor(Math.random() * formationEnemies.length)];
+        attacker.state = 'diving';
+        attacker.t = 0;
+    }
 
     if (hitWall) {
         enemyDirection *= -1;
