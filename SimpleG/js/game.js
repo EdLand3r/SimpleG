@@ -189,20 +189,22 @@ function update(deltaTime) {
     enemies.forEach(enemy => {
         if (!enemy.alive) return;
 
+        // Update theoretical formation position for all
+        enemy.startX += enemyBaseSpeed * enemyDirection * deltaTime;
+        if (enemy.startX + enemy.width > canvas.width - 10 || enemy.startX < 10) {
+            hitWall = true;
+        }
+
         if (enemy.state === 'formation') {
             formationEnemies.push(enemy);
-            enemy.startX += enemyBaseSpeed * enemyDirection * deltaTime;
             enemy.x = enemy.startX;
             enemy.y = enemy.startY;
-            
-            if (enemy.x + enemy.width > canvas.width - 10 || enemy.x < 10) {
-                hitWall = true;
-            }
         } else if (enemy.state === 'diving') {
             enemy.t += 0.5 * deltaTime; // Dive speed
             if (enemy.t > 1) {
                 // Return to formation
                 enemy.state = 'formation';
+                enemy.x = enemy.startX;
                 enemy.y = enemy.startY;
             } else {
                 // Simple dive path (p0=start, p1=forward, p2=near player, p3=loop back)
@@ -236,9 +238,7 @@ function update(deltaTime) {
     if (hitWall) {
         enemyDirection *= -1;
         enemies.forEach(enemy => {
-            if(enemy.state === 'formation') {
-                enemy.startY += 10;
-            }
+            enemy.startY += 10; // Everyone's slot drops down
         }); 
     }
 
